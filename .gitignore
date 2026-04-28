@@ -1,0 +1,5 @@
+build/bin
+go.sum
+wailsjs
+*.exe
+.idea

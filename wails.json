@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "HiJson",
+  "outputfilename": "HiJson",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "",
+  "author": {
+    "name": "Lynn"
+  },
+  "info": {
+    "companyName": "Lynn",
+    "productName": "HiJson",
+    "productVersion": "1.0.0",
+    "copyright": "Copyright © 2026 Lynn",
+    "comments": "HiJson"
+  }
+}
+

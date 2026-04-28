@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HiJson</title>
+    <style>
+        :root {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #2d2d2d;
+            --bg-tertiary: #252526;
+            --bg-hover: #2a2d2e;
+            --bg-selected: #094771;
+            --bg-button: #3c3c3c;
+            --bg-button-hover: #4a4a4a;
+            --border: #404040;
+            --border-btn: #555;
+            --text-primary: #d4d4d4;
+            --text-secondary: #969696;
+            --text-key: #9cdcfe;
+            --text-string: #ce9178;
+            --text-number: #b5cea8;
+            --text-bool: #569cd6;
+            --text-null: #808080;
+            --text-bracket: #ffd700;
+            --accent: #007acc;
+            --error: #f44336;
+        }
+        [data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f3f3;
+            --bg-tertiary: #e8e8e8;
+            --bg-hover: #e8e8e8;
+            --bg-selected: #cce5ff;
+            --bg-button: #e0e0e0;
+            --bg-button-hover: #d0d0d0;
+            --border: #d4d4d4;
+            --border-btn: #bbb;
+            --text-primary: #1e1e1e;
+            --text-secondary: #555;
+            --text-key: #0451a5;
+            --text-string: #a31515;
+            --text-number: #098658;
+            --text-bool: #0000ff;
+            --text-null: #808080;
+            --text-bracket: #b8860b;
+            --accent: #007acc;
+            --error: #d32f2f;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; height: 100vh; display: flex; flex-direction: column; background: var(--bg-primary); color: var(--text-primary); overflow: hidden; --wails-drop-target: drop; }
+
+        /* Toolbar */
+        .toolbar { display: flex; align-items: center; gap: 4px; padding: 6px 10px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+        .toolbar button { padding: 4px 10px; border: 1px solid var(--border-btn); background: var(--bg-button); color: var(--text-primary); border-radius: 3px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+        .toolbar button:hover { background: var(--bg-button-hover); }
+        .toolbar button:active { background: var(--border-btn); }
+        .toolbar .separator { width: 1px; height: 20px; background: var(--border-btn); margin: 0 6px; }
+        .toolbar select { padding: 3px 6px; border: 1px solid var(--border-btn); background: var(--bg-button); color: var(--text-primary); border-radius: 3px; font-size: 12px; cursor: pointer; }
+
+        /* Tabs */
+        .tab-bar { display: flex; background: var(--bg-tertiary); border-bottom: 1px solid var(--border); overflow-x: auto; }
+        .tab { padding: 6px 16px; cursor: pointer; font-size: 12px; border-right: 1px solid var(--border); display: flex; align-items: center; gap: 6px; color: var(--text-secondary); white-space: nowrap; }
+        .tab.active { background: var(--bg-primary); color: var(--text-primary); }
+        .tab .close-btn { font-size: 14px; line-height: 1; opacity: 0.5; }
+        .tab .close-btn:hover { opacity: 1; color: var(--error); }
+
+        /* Main Area */
+        .main { flex: 1; display: flex; overflow: hidden; }
+        .editor-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+        .right-pane { flex: 1; display: flex; flex-direction: column; border-left: 1px solid var(--border); min-width: 0; min-height: 0; }
+        .resizer { width: 4px; background: var(--border); cursor: col-resize; flex-shrink: 0; }
+        .resizer:hover { background: var(--accent); }
+
+        /* Editor */
+        .editor-container { flex: 1; position: relative; overflow: hidden; }
+        .editor-container textarea { width: 100%; height: 100%; resize: none; border: none; background: var(--bg-primary); color: var(--text-primary); font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; padding: 10px; line-height: 1.5; outline: none; tab-size: 2; }
+
+        /* Tree */
+        .tree-container { flex: 1; overflow: auto; padding: 8px; font-family: 'Consolas', monospace; font-size: 12px; }
+        .tree-node { padding: 1px 0; cursor: default; }
+        .tree-node > .node-line { padding: 2px 4px; border-radius: 2px; }
+        .tree-node > .node-line:hover { background: var(--bg-hover); }
+        .tree-node > .node-line.selected { background: var(--bg-selected); }
+        .tree-node .toggle { display: inline-block; width: 16px; cursor: pointer; text-align: center; user-select: none; }
+        .tree-node .key { color: var(--text-key); }
+        .tree-node .sep { color: var(--text-primary); }
+        .tree-node .val-string { color: var(--text-string); }
+        .tree-node .val-number { color: var(--text-number); }
+        .tree-node .val-bool { color: var(--text-bool); }
+        .tree-node .val-null { color: var(--text-null); font-style: italic; }
+        .tree-node .bracket { color: var(--text-bracket); }
+        .tree-children { padding-left: 20px; }
+        .tree-children.collapsed { display: none; }
+
+        /* Table */
+        .table-container { height: 180px; border-top: 1px solid var(--border); overflow: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
+        th { background: var(--bg-secondary); position: sticky; top: 0; }
+
+        /* Search bar */
+        .search-bar { display: none; padding: 6px 10px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); gap: 6px; align-items: center; }
+        .search-bar.visible { display: flex; }
+        .search-bar input { padding: 4px 8px; border: 1px solid var(--border-btn); background: var(--bg-primary); color: var(--text-primary); border-radius: 3px; font-size: 12px; width: 240px; }
+        .search-bar button { padding: 4px 10px; border: 1px solid var(--border-btn); background: var(--bg-button); color: var(--text-primary); border-radius: 3px; cursor: pointer; font-size: 12px; }
+        .search-bar .result { font-size: 12px; color: var(--text-secondary); min-width: 80px; }
+        .search-bar label { font-size: 12px; color: var(--text-secondary); margin-left: 8px; }
+
+        /* Context Menu */
+        .context-menu { position: fixed; background: var(--bg-secondary); border: 1px solid var(--border-btn); border-radius: 4px; padding: 4px 0; z-index: 10000; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .context-menu-item { padding: 6px 16px; font-size: 12px; cursor: pointer; color: var(--text-primary); }
+        .context-menu-item:hover { background: var(--bg-selected); }
+        .context-menu-separator { height: 1px; background: var(--border-btn); margin: 4px 0; }
+
+        /* Drop overlay */
+        .drop-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,122,204,0.15); border: 3px dashed var(--accent); z-index: 99998; display: none; align-items: center; justify-content: center; font-size: 24px; color: var(--accent); pointer-events: none; }
+        .drop-overlay.visible { display: flex; }
+
+        /* Toast */
+        .toast { position: fixed; top: 50px; right: 20px; background: var(--error); color: white; padding: 10px 20px; border-radius: 4px; font-size: 13px; z-index: 99999; display: none; max-width: 400px; word-break: break-all; }
+        .toast.show { display: block; }
+    </style>
+</head>
+<body>
+    <div class="toolbar" id="toolbar">
+        <button onclick="addTab()">新标签(N)</button>
+        <div class="separator"></div>
+        <button onclick="doFormat()">格式化(F)</button>
+        <button onclick="doSortFormat()">排序(G)</button>
+        <button onclick="doCompress()">压缩(H)</button>
+        <button onclick="doFilter()">去空(B)</button>
+        <button onclick="doDeepParse()">解析(X)</button>
+        <div class="separator"></div>
+        <button onclick="doClear()">清空(D)</button>
+        <button onclick="doPaste()">粘帖(V)</button>
+        <button onclick="doRemoveNewlines()">清除(\n)</button>
+        <button onclick="doRemoveBackslashes()">清除(\)</button>
+        <div class="separator"></div>
+        <button onclick="toggleSearch('text')">文本查找</button>
+        <button onclick="toggleSearch('tree')">节点查找</button>
+        <div class="separator"></div>
+        <button onclick="doOpenFile()">打开文件</button>
+        <button onclick="doSaveFile()">保存文件</button>
+        <div class="separator"></div>
+        <select onchange="setTheme(this.value)" id="themeSelect">
+            <option value="dark">暗色主题</option>
+            <option value="light">亮色主题</option>
+        </select>
+    </div>
+
+    <div class="tab-bar" id="tabBar"></div>
+
+    <div class="search-bar" id="searchBar">
+        <input type="text" id="searchInput" placeholder="查找内容..." onkeydown="if(event.key==='Enter')doSearch()">
+        <button onclick="doSearch()">查找</button>
+        <button onclick="doSearchPrev()">上一个</button>
+        <button onclick="doSearchNext()">下一个</button>
+        <button onclick="closeSearch()">关闭</button>
+        <span class="result" id="searchResult"></span>
+        <label id="searchModeLabel">文本查找</label>
+    </div>
+
+    <div class="main" id="mainArea">
+        <div class="editor-pane" id="editorPane">
+            <div class="editor-container">
+                <textarea id="editor" spellcheck="false" placeholder="在此粘贴或输入JSON..." oncontextmenu="showEditorContextMenu(event)"></textarea>
+            </div>
+        </div>
+        <div class="resizer" id="resizer"></div>
+        <div class="right-pane" id="rightPane">
+            <div class="tree-container" id="treeContainer"></div>
+            <div class="table-container" id="tableContainer">
+                <table>
+                    <thead><tr><th>Key</th><th>Value</th></tr></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="drop-overlay" id="dropOverlay">拖放JSON文件到此处</div>
+
+    <script>
+    // --- State ---
+    let tabs = [];
+    let activeTabId = 0;
+    let tabIdCounter = 0;
+    let searchMode = 'text';
+    let searchMatches = [];
+    let searchIdx = -1;
+    let treeSearchResults = [];
+    let treeSearchIdx = -1;
+    let currentJsonData = null;
+    let selectedTreeNode = null;
+
+    // --- Tab Management ---
+    function createTabData(name) {
+        return { id: tabIdCounter++, name: name, content: '', treeHtml: '', jsonData: null };
+    }
+
+    function addTab(name) {
+        saveTabContent();
+        const tab = createTabData(name || 'NewTab');
+        tabs.push(tab);
+        activeTabId = tab.id;
+        renderTabs();
+        getEditor().value = '';
+        document.getElementById('treeContainer').innerHTML = '';
+        document.getElementById('tableBody').innerHTML = '';
+        currentJsonData = null;
+    }
+
+    function closeCurrentTab() {
+        if (tabs.length <= 1) return;
+        const idx = tabs.findIndex(t => t.id === activeTabId);
+        tabs.splice(idx, 1);
+        activeTabId = tabs[Math.min(idx, tabs.length - 1)].id;
+        renderTabs();
+        loadTabContent();
+    }
+
+    function switchTab(id) {
+        if (id === activeTabId) return;
+        saveTabContent();
+        activeTabId = id;
+        renderTabs();
+        loadTabContent();
+        clearTreeSearch();
+    }
+
+    function saveTabContent() {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab) {
+            tab.content = getEditor().value;
+            tab.treeHtml = document.getElementById('treeContainer').innerHTML;
+            tab.jsonData = currentJsonData;
+        }
+    }
+
+    function loadTabContent() {
+        const tab = tabs.find(t => t.id === activeTabId);
+        if (tab) {
+            getEditor().value = tab.content || '';
+            document.getElementById('treeContainer').innerHTML = '';
+            document.getElementById('tableBody').innerHTML = '';
+            currentJsonData = tab.jsonData || null;
+            if (currentJsonData !== null) {
+                const container = document.getElementById('treeContainer');
+                container.appendChild(createTreeNode('JSON', currentJsonData, [], true));
+            }
+        }
+    }
+
+    function renderTabs() {
+        const bar = document.getElementById('tabBar');
+        bar.innerHTML = tabs.map(t => `
+            <div class="tab ${t.id === activeTabId ? 'active' : ''}" onclick="switchTab(${t.id})">
+                <span>${escHtml(t.name)}</span>
+                <span class="close-btn" onclick="event.stopPropagation();closeTab(${t.id})">×</span>
+            </div>
+        `).join('');
+    }
+
+    function closeTab(id) {
+        if (tabs.length <= 1) return;
+        const idx = tabs.findIndex(t => t.id === id);
+        tabs.splice(idx, 1);
+        if (id === activeTabId) {
+            activeTabId = tabs[Math.min(idx, tabs.length - 1)].id;
+            loadTabContent();
+        }
+        renderTabs();
+    }
+
+    function getEditor() { return document.getElementById('editor'); }
+
+    // --- JSON Operations ---
+    async function doFormat() {
+        const text = getEditor().value;
+        if (!text.trim()) return;
+        const result = await window.go.main.App.FormatJSON(text);
+        handleResult(result);
+    }
+
+    async function doSortFormat() {
+        const text = getEditor().value;
+        if (!text.trim()) return;
+        const result = await window.go.main.App.FormatSortedJSON(text);
+        handleResult(result);
+    }
+
+    async function doCompress() {
+        const text = getEditor().value;
+        if (!text.trim()) return;
+        const result = await window.go.main.App.CompressJSON(text);
+        handleResult(result);
+    }
+
+    async function doFilter() {
+        const text = getEditor().value;
+        if (!text.trim()) return;
+        const result = await window.go.main.App.FilterJSON(text);
+        handleResult(result);
+    }
+
+    async function doDeepParse() {
+        const text = getEditor().value;
+        if (!text.trim()) return;
+        const result = await window.go.main.App.DeepParseJSON(text);
+        handleResult(result);
+    }
+
+    function handleResult(result) {
+        if (result.success) {
+            getEditor().value = result.text;
+            buildTree(result.text);
+        } else {
+            showToast('非法JSON: ' + result.error);
+        }
+    }
+
+    function doClear() {
+        getEditor().value = '';
+        document.getElementById('treeContainer').innerHTML = '';
+        document.getElementById('tableBody').innerHTML = '';
+        currentJsonData = null;
+    }
+
+    async function doPaste() {
+        try {
+            const text = await navigator.clipboard.readText();
+            getEditor().value = text;
+            doFormat();
+        } catch(e) {
+            getEditor().focus();
+            document.execCommand('paste');
+            setTimeout(doFormat, 100);
+        }
+    }
+
+    function doRemoveNewlines() {
+        getEditor().value = getEditor().value.replace(/\n/g, '');
+    }
+
+    function doRemoveBackslashes() {
+        getEditor().value = getEditor().value.replace(/\\/g, '');
+    }
+
+    async function doOpenFile() {
+        const result = await window.go.main.App.OpenFile();
+        if (result.success) {
+            getEditor().value = result.text;
+            buildTree(result.text);
+        } else if (result.error !== '未选择文件') {
+            showToast(result.error);
+        }
+    }
+
+    async function doSaveFile() {
+        const text = getEditor().value;
+        const result = await window.go.main.App.SaveFile(text);
+        if (!result.success && result.error !== '未选择文件') {
+            showToast(result.error);
+        }
+    }
+
+    // --- Layout ---
+    function closeSearch() {
+        document.getElementById('searchBar').classList.remove('visible');
+        searchMatches = [];
+        searchIdx = -1;
+        treeSearchResults = [];
+        treeSearchIdx = -1;
+    }
+
+    // --- Tree ---
+    function buildTree(jsonText) {
+        const container = document.getElementById('treeContainer');
+        try {
+            currentJsonData = JSON.parse(jsonText);
+            container.innerHTML = '';
+            container.appendChild(createTreeNode('JSON', currentJsonData, [], true));
+        } catch(e) {
+            container.innerHTML = '<div style="color:#f44">无法构建树结构</div>';
+            currentJsonData = null;
+        }
+    }
+
+    function createTreeNode(key, value, path, isRoot) {
+        const div = document.createElement('div');
+        div.className = 'tree-node';
+        const currentPath = [...path, key];
+
+        if (value === null) {
+            const line = document.createElement('div');
+            line.className = 'node-line';
+            line.innerHTML = renderLeaf(key, '<span class="val-null">null</span>');
+            line.onclick = (e) => { e.stopPropagation(); selectTreeNode(line); showInTable(key, 'null'); };
+            line.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); selectTreeNode(line); showTreeContextMenu(e, key, 'null', currentPath, value); };
+            div.appendChild(line);
+        } else if (Array.isArray(value)) {
+            const line = document.createElement('div');
+            line.className = 'node-line';
+            const toggle = document.createElement('span');
+            toggle.className = 'toggle';
+            toggle.textContent = '▼';
+            const label = document.createElement('span');
+            label.innerHTML = `<span class="key">${escHtml(String(key))}</span> <span class="bracket">[${value.length}]</span>`;
+            line.appendChild(toggle);
+            line.appendChild(label);
+            const children = document.createElement('div');
+            children.className = 'tree-children';
+            value.forEach((item, i) => children.appendChild(createTreeNode(`[${i}]`, item, currentPath, false)));
+            toggle.onclick = (e) => { e.stopPropagation(); children.classList.toggle('collapsed'); toggle.textContent = children.classList.contains('collapsed') ? '▶' : '▼'; };
+            line.onclick = (e) => { e.stopPropagation(); selectTreeNode(line); showChildrenInTable(value, true); };
+            line.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); selectTreeNode(line); showTreeContextMenu(e, key, value, currentPath, value); };
+            div.appendChild(line);
+            div.appendChild(children);
+        } else if (typeof value === 'object') {
+            const line = document.createElement('div');
+            line.className = 'node-line';
+            const toggle = document.createElement('span');
+            toggle.className = 'toggle';
+            toggle.textContent = '▼';
+            const label = document.createElement('span');
+            const keys = Object.keys(value);
+            label.innerHTML = `<span class="key">${escHtml(String(key))}</span> <span class="bracket">{${keys.length}}</span>`;
+            line.appendChild(toggle);
+            line.appendChild(label);
+            const children = document.createElement('div');
+            children.className = 'tree-children';
+            keys.forEach(k => children.appendChild(createTreeNode(k, value[k], currentPath, false)));
+            toggle.onclick = (e) => { e.stopPropagation(); children.classList.toggle('collapsed'); toggle.textContent = children.classList.contains('collapsed') ? '▶' : '▼'; };
+            line.onclick = (e) => { e.stopPropagation(); selectTreeNode(line); showChildrenInTable(value, false); };
+            line.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); selectTreeNode(line); showTreeContextMenu(e, key, value, currentPath, value); };
+            div.appendChild(line);
+            div.appendChild(children);
+        } else {
+            const line = document.createElement('div');
+            line.className = 'node-line';
+            const valClass = typeof value === 'number' ? 'val-number' : typeof value === 'boolean' ? 'val-bool' : 'val-string';
+            const displayVal = typeof value === 'string' ? `"${escHtml(value)}"` : String(value);
+            line.innerHTML = `<span class="toggle"></span>${renderLeaf(key, `<span class="${valClass}">${displayVal}</span>`)}`;
+            line.onclick = (e) => { e.stopPropagation(); selectTreeNode(line); showInTable(key, value); };
+            line.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); selectTreeNode(line); showTreeContextMenu(e, key, value, currentPath, value); };
+            div.appendChild(line);
+        }
+        div.dataset.key = String(key);
+        div.dataset.path = currentPath.join('\x1e');
+        if (value === null || typeof value !== 'object') {
+            div.dataset.value = String(value);
+            div.dataset.leaf = 'true';
+        }
+        return div;
+    }
+
+    function selectTreeNode(lineEl) {
+        if (selectedTreeNode) selectedTreeNode.classList.remove('selected');
+        selectedTreeNode = lineEl;
+        lineEl.classList.add('selected');
+        hideContextMenu();
+    }
+
+    function renderLeaf(key, valHtml) {
+        return `<span class="key">${escHtml(String(key))}</span><span class="sep"> : </span>${valHtml}`;
+    }
+
+    function showInTable(key, value) {
+        const tbody = document.getElementById('tableBody');
+        tbody.innerHTML = `<tr><td>${escHtml(String(key))}</td><td>${escHtml(String(value))}</td></tr>`;
+    }
+
+    function showChildrenInTable(obj, isArray) {
+        const tbody = document.getElementById('tableBody');
+        let html = '';
+        if (isArray) {
+            obj.forEach((item, i) => {
+                const val = item === null ? 'null' : typeof item === 'object' ? JSON.stringify(item) : String(item);
+                html += `<tr><td>[${i}]</td><td>${escHtml(val)}</td></tr>`;
+            });
+        } else {
+            Object.entries(obj).forEach(([k, v]) => {
+                const val = v === null ? 'null' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+                html += `<tr><td>${escHtml(k)}</td><td>${escHtml(val)}</td></tr>`;
+            });
+        }
+        tbody.innerHTML = html;
+    }
+
+    // --- Tree Context Menu ---
+    function showTreeContextMenu(e, key, value, path, rawValue) {
+        hideContextMenu();
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.id = 'contextMenu';
+
+        const items = [
+            { label: '复制 键名', action: () => copyText(String(key)) },
+            { label: '复制 键值', action: () => copyText(getValueStr(rawValue)) },
+            { label: '复制 键名:键值', action: () => copyText(key + ' : ' + getValueStr(rawValue)) },
+            { sep: true },
+            { label: '复制 路径', action: () => copyText(buildPathString(path)) },
+            { label: '复制 节点内容', action: () => copyText(typeof rawValue === 'object' && rawValue !== null ? JSON.stringify(rawValue) : String(rawValue ?? 'null')) },
+            { label: '复制 节点内容(格式化)', action: () => copyText(typeof rawValue === 'object' && rawValue !== null ? JSON.stringify(rawValue, null, 2) : String(rawValue ?? 'null')) },
+        ];
+
+        items.forEach(item => {
+            if (item.sep) {
+                const sep = document.createElement('div');
+                sep.className = 'context-menu-separator';
+                menu.appendChild(sep);
+            } else {
+                const el = document.createElement('div');
+                el.className = 'context-menu-item';
+                el.textContent = item.label;
+                el.onclick = () => { item.action(); hideContextMenu(); };
+                menu.appendChild(el);
+            }
+        });
+
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+        document.body.appendChild(menu);
+
+        const rect = menu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) menu.style.left = (window.innerWidth - rect.width - 5) + 'px';
+        if (rect.bottom > window.innerHeight) menu.style.top = (window.innerHeight - rect.height - 5) + 'px';
+    }
+
+    function getValueStr(value) {
+        if (value === null) return 'null';
+        if (typeof value === 'object') return JSON.stringify(value);
+        return String(value);
+    }
+
+    function buildPathString(path) {
+        return path.slice(1).join('.').replace(/\.\[/g, '[');
+    }
+
+    // --- Editor Context Menu ---
+    function showEditorContextMenu(e) {
+        e.preventDefault();
+        hideContextMenu();
+        const editor = getEditor();
+        const hasSelection = editor.selectionStart !== editor.selectionEnd;
+
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.id = 'contextMenu';
+
+        const items = [
+            { label: '复制', enabled: hasSelection, action: () => document.execCommand('copy') },
+            { label: '粘帖并格式化', enabled: true, action: () => doPaste() },
+            { label: '全选', enabled: true, action: () => editor.select() },
+            { label: '清空', enabled: true, action: () => doClear() },
+        ];
+
+        items.forEach(item => {
+            const el = document.createElement('div');
+            el.className = 'context-menu-item';
+            el.textContent = item.label;
+            if (!item.enabled) el.style.opacity = '0.4';
+            el.onclick = () => { if (item.enabled) item.action(); hideContextMenu(); };
+            menu.appendChild(el);
+        });
+
+        menu.style.left = e.clientX + 'px';
+        menu.style.top = e.clientY + 'px';
+        document.body.appendChild(menu);
+    }
+
+    function hideContextMenu() {
+        const existing = document.getElementById('contextMenu');
+        if (existing) existing.remove();
+    }
+    document.addEventListener('click', hideContextMenu);
+
+    function copyText(text) {
+        navigator.clipboard.writeText(text).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        });
+    }
+
+    // --- Search ---
+    function toggleSearch(mode) {
+        searchMode = mode || 'text';
+        const bar = document.getElementById('searchBar');
+        const label = document.getElementById('searchModeLabel');
+        label.textContent = searchMode === 'text' ? '文本查找' : '节点查找';
+        bar.classList.add('visible');
+        document.getElementById('searchInput').focus();
+        document.getElementById('searchResult').textContent = '';
+        searchMatches = [];
+        searchIdx = -1;
+        treeSearchResults = [];
+        treeSearchIdx = -1;
+    }
+
+    function doSearch() {
+        const key = document.getElementById('searchInput').value;
+        if (!key) return;
+        if (searchMode === 'text') searchInText(key);
+        else searchInTree(key);
+    }
+
+    function searchInText(key) {
+        const text = getEditor().value;
+        searchMatches = [];
+        searchIdx = -1;
+        let idx = 0;
+        const lowerText = text.toLowerCase();
+        const lowerKey = key.toLowerCase();
+        while ((idx = lowerText.indexOf(lowerKey, idx)) !== -1) {
+            searchMatches.push(idx);
+            idx += 1;
+        }
+        if (searchMatches.length > 0) {
+            searchIdx = 0;
+            highlightTextSearch();
+        }
+        updateSearchResult();
+    }
+
+    function searchInTree(key) {
+        treeSearchResults = [];
+        treeSearchIdx = -1;
+        const container = document.getElementById('treeContainer');
+        const allNodes = container.querySelectorAll('.tree-node[data-leaf="true"]');
+        const lowerKey = key.toLowerCase();
+        allNodes.forEach(node => {
+            const text = (node.dataset.key + ' : ' + node.dataset.value).toLowerCase();
+            if (text.includes(lowerKey)) {
+                treeSearchResults.push(node);
+            }
+        });
+        if (treeSearchResults.length > 0) {
+            treeSearchIdx = 0;
+            highlightTreeSearch();
+        }
+        updateSearchResult();
+    }
+
+    function doSearchNext() {
+        if (searchMode === 'text') {
+            if (searchMatches.length === 0) return;
+            searchIdx = (searchIdx + 1) % searchMatches.length;
+            highlightTextSearch();
+        } else {
+            if (treeSearchResults.length === 0) return;
+            treeSearchIdx = (treeSearchIdx + 1) % treeSearchResults.length;
+            highlightTreeSearch();
+        }
+        updateSearchResult();
+    }
+
+    function doSearchPrev() {
+        if (searchMode === 'text') {
+            if (searchMatches.length === 0) return;
+            searchIdx = (searchIdx - 1 + searchMatches.length) % searchMatches.length;
+            highlightTextSearch();
+        } else {
+            if (treeSearchResults.length === 0) return;
+            treeSearchIdx = (treeSearchIdx - 1 + treeSearchResults.length) % treeSearchResults.length;
+            highlightTreeSearch();
+        }
+        updateSearchResult();
+    }
+
+    function highlightTextSearch() {
+        const editor = getEditor();
+        const key = document.getElementById('searchInput').value;
+        const pos = searchMatches[searchIdx];
+        editor.focus();
+        editor.setSelectionRange(pos, pos + key.length);
+        // Scroll textarea to make selection visible
+        const text = editor.value.substring(0, pos);
+        const lineNumber = text.split('\n').length - 1;
+        const lineHeight = parseFloat(getComputedStyle(editor).lineHeight) || 19.5;
+        const visibleHeight = editor.clientHeight;
+        const targetScroll = lineNumber * lineHeight - visibleHeight / 2;
+        editor.scrollTop = Math.max(0, targetScroll);
+    }
+
+    function highlightTreeSearch() {
+        const node = treeSearchResults[treeSearchIdx];
+        let parent = node.parentElement;
+        while (parent) {
+            if (parent.classList && parent.classList.contains('tree-children') && parent.classList.contains('collapsed')) {
+                parent.classList.remove('collapsed');
+                const prevLine = parent.previousElementSibling;
+                if (prevLine) {
+                    const toggle = prevLine.querySelector('.toggle');
+                    if (toggle) toggle.textContent = '▼';
+                }
+            }
+            parent = parent.parentElement;
+        }
+        const line = node.querySelector('.node-line');
+        if (line) {
+            selectTreeNode(line);
+            line.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+    }
+
+    function clearTreeSearch() {
+        treeSearchResults = [];
+        treeSearchIdx = -1;
+    }
+
+    function updateSearchResult() {
+        const el = document.getElementById('searchResult');
+        if (searchMode === 'text') {
+            el.textContent = searchMatches.length === 0 ? '没找到' : `${searchIdx + 1} / ${searchMatches.length}`;
+        } else {
+            el.textContent = treeSearchResults.length === 0 ? '没找到' : `${treeSearchIdx + 1} / ${treeSearchResults.length}`;
+        }
+    }
+
+    // --- Resizer ---
+    (function() {
+        const resizer = document.getElementById('resizer');
+        const editorPane = document.getElementById('editorPane');
+        const rightPane = document.getElementById('rightPane');
+        let startX, editorStartW, rightStartW;
+
+        resizer.addEventListener('mousedown', (e) => {
+            startX = e.clientX;
+            editorStartW = editorPane.offsetWidth;
+            rightStartW = rightPane.offsetWidth;
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', stopDrag);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+
+        function onDrag(e) {
+            const dx = e.clientX - startX;
+            const newEditorW = editorStartW + dx;
+            const newRightW = rightStartW - dx;
+            if (newEditorW > 100 && newRightW > 100) {
+                editorPane.style.flex = 'none';
+                editorPane.style.width = newEditorW + 'px';
+                rightPane.style.flex = 'none';
+                rightPane.style.width = newRightW + 'px';
+            }
+        }
+
+        function stopDrag() {
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    })();
+
+    // --- Toast ---
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 4000);
+    }
+
+    // --- Keyboard shortcuts ---
+    document.addEventListener('keydown', (e) => {
+        if (e.ctrlKey) {
+            switch(e.key.toLowerCase()) {
+                case 'f': e.preventDefault(); doFormat(); break;
+                case 'g': e.preventDefault(); doSortFormat(); break;
+                case 'h': e.preventDefault(); doCompress(); break;
+                case 'b': e.preventDefault(); doFilter(); break;
+                case 'd': e.preventDefault(); doClear(); break;
+                case 'n': e.preventDefault(); addTab(); break;
+                case 'w': e.preventDefault(); closeCurrentTab(); break;
+                case 'o': e.preventDefault(); doOpenFile(); break;
+                case 's': e.preventDefault(); doSaveFile(); break;
+            }
+        }
+        if (e.key === 'Escape') {
+            closeSearch();
+            hideContextMenu();
+        }
+    });
+
+    // Prevent Ctrl+scroll zoom
+    document.addEventListener('wheel', (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+
+    function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // --- Theme ---
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('hijson-theme', theme);
+    }
+
+    function loadTheme() {
+        const saved = localStorage.getItem('hijson-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', saved);
+        document.getElementById('themeSelect').value = saved;
+    }
+
+    // --- Drag and Drop ---
+    // Use Wails runtime OnFileDrop API
+    window.addEventListener('DOMContentLoaded', () => {
+        // Wait for wails runtime to be ready
+        setTimeout(() => {
+            if (window.runtime && window.runtime.OnFileDrop) {
+                window.runtime.OnFileDrop(async (x, y, paths) => {
+                    if (paths && paths.length > 0) {
+                        const result = await window.go.main.App.ReadFilePath(paths[0]);
+                        if (result.success) {
+                            getEditor().value = result.text;
+                            buildTree(result.text);
+                        } else {
+                            showToast(result.error);
+                        }
+                    }
+                }, true);
+            }
+        }, 500);
+    });
+
+    // --- Init ---
+    loadTheme();
+    addTab('Welcome');
+
+    // Check if a file was passed as startup argument (drag file onto app icon)
+    window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(async () => {
+            try {
+                const result = await window.go.main.App.GetStartupFile();
+                if (result.success) {
+                    getEditor().value = result.text;
+                    buildTree(result.text);
+                }
+            } catch(e) {}
+        }, 300);
+    });
+    </script>
+</body>
+</html>
+
